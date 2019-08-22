@@ -1,0 +1,7 @@
+### 40 sample
+
+BatchNormalization -> val loss: 0.085
+
+No BatchNormalization -> val loss: 0.075
+
+Zoom in full-image: scale(0.9 -> 1) -> val loss 0.06

@@ -3,7 +3,7 @@ from keras.preprocessing.image import ImageDataGenerator
 import numpy as np 
 import os
 import glob
-
+import cv2
 import config
 
 
@@ -11,10 +11,19 @@ import config
 def normalize(img, mask):
     if(np.max(img) > 1):
         img = img / 255
-        mask = mask /255
+        mask = mask / 255
+        # if np.sum(mask) != np.sum((mask == 1).astype(np.uint8)):
+        #     print("-----")
         mask[mask > 0.5] = 1
         mask[mask <= 0.5] = 0
-    return (img,mask)
+        # print(img.shape)
+        # print(mask.shape)
+        # print(np.max(img))
+        # print(np.min(img))
+        # print(np.max(mask))
+        # print(np.min(mask))
+        # print("---")
+    return (img, mask)
 
 def dataGenerator(batch_size, train_path, image_folder, mask_folder, aug_dict, image_color_mode = "rgb",
                     mask_color_mode = "grayscale", image_save_prefix  = "image", mask_save_prefix  = "mask",
@@ -48,6 +57,9 @@ def dataGenerator(batch_size, train_path, image_folder, mask_folder, aug_dict, i
     train_generator = zip(image_generator, mask_generator)
 
     for (img, mask) in train_generator:
+        # cv2.imwrite('image.png', img)
+        # cv2.imwrite('mask.png', mask)
+        # cv2.waitKey(0)
         img, mask = normalize(img,mask)
         yield (img,mask)
 
