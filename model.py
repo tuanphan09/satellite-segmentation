@@ -1,9 +1,7 @@
-import numpy as np 
 import os
 import numpy as np
 from keras.models import *
 from keras.layers import *
-from keras import backend as keras
 
 def unet(input_size = (256,256,3)):
     inputs = Input(input_size)
@@ -22,16 +20,16 @@ def unet(input_size = (256,256,3)):
     conv4 = Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool3)
     conv4 = Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv4)
     # conv4 = BatchNormalization()(conv4)
-    drop4 = Dropout(0.3)(conv4)
-    pool4 = MaxPooling2D(pool_size=(2, 2))(drop4)
+    # drop4 = Dropout(0.3)(conv4)
+    pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
 
     conv5 = Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool4)
     conv5 = Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv5)
     # conv5 = BatchNormalization()(conv5)
-    drop5 = Dropout(0.3)(conv5)
+    # drop5 = Dropout(0.3)(conv5)
 
-    up6 = Conv2D(256, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(drop5))
-    merge6 = concatenate([drop4,up6], axis = 3)
+    up6 = Conv2D(256, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(conv5))
+    merge6 = concatenate([conv4, up6], axis = 3)
     conv6 = Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge6)
     conv6 = Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv6)
     # conv6 = BatchNormalization()(conv6)
@@ -59,8 +57,6 @@ def unet(input_size = (256,256,3)):
 
     model = Model(input = inputs, output = conv10)
     
-    model.summary()
-
     return model
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from keras.losses import binary_crossentropy
 
 # src: https://www.kaggle.com/aglotero/another-iou-metric
 def iou_metric(y_true_in, y_pred_in, print_table=False):
@@ -66,3 +67,23 @@ def iou_metric_batch(y_true_in, y_pred_in):
 def my_iou_metric(label, pred):
     metric_value = tf.py_func(iou_metric_batch, [label, pred], tf.float64)
     return metric_value
+
+
+def bce_dice_loss(y_true, y_pred):
+    def dice_loss(y_true, y_pred):
+        numerator = 2 * tf.reduce_sum(y_true * y_pred, axis=(1,2,3))
+        denominator = tf.reduce_sum(y_true + y_pred, axis=(1,2,3))
+
+        return tf.reshape(1 - numerator / denominator, (-1, 1, 1))
+
+    return binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
+
+
+
+# ensemble strategy
+def gemetric_mean(iterable):
+    a = np.array(iterable)
+    return a.prod()**(1.0/len(a))
+def gemetric_mean_overflow(iterable):
+    a = np.log(iterable)
+    return np.exp(a.sum()/len(a))

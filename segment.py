@@ -11,10 +11,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def load_pretrained_model():
-    # model = unet(input_size = config.input_size)
-    model = sm.Unet('resnet34', encoder_weights='imagenet', input_shape=config.input_size, classes=1, activation='sigmoid')
+    model = unet(input_size = config.input_size)
+    # model = sm.Unet('resnet34', encoder_weights='imagenet', input_shape=config.input_size, classes=1, activation='sigmoid')
     if(config.pretrained_weights):
-        print("Load pretrained model!!!")
+        print("\n......Loading pretrained model from {}....\n".format(config.pretrained_weights))
         model.load_weights(config.pretrained_weights)
     return model
 
@@ -27,7 +27,7 @@ model = load_pretrained_model()
     #     img_out[img == i,:] = color
     # return img_out / 255
 
-def segmentaion_dir(model, data_dir):
+def segmentaion_dir(data_dir):
     input_data = []
     for fname in os.listdir(data_dir):
         if random.randint(0, 100) < 10:
@@ -72,36 +72,58 @@ def split(image, strides=(100, 100)):
 
     return position, input_image
 
-def get_mask(image):
+def get_mask(image, mode='average'):
     position, input_data = split(image, strides=(100, 120))
     input_data = np.array(input_data)
     prediction = model.predict(input_data, verbose=1)
 
     total_mask = np.zeros(image.shape[:-1])    
     count_mask = np.zeros(image.shape[:-1])    
-    for i in range(len(position)):
-        x, y = position[i]
-        total_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += prediction[i,:,:,0]
-        count_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += 1
-    return total_mask / count_mask
-
+    if mode == 'average':
+        for i in range(len(position)):
+            x, y = position[i]
+            total_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += prediction[i,:,:,0]
+            count_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += 1
+        return total_mask / count_mask
+    elif mode == 'geometric':
+        for i in range(len(position)):
+            x, y = position[i]
+            total_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += np.log(prediction[i,:,:,0])
+            count_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += 1
+        return np.exp(total_mask / count_mask)
+    else:
+        print("No mode fought for ensembling!")
+        return None
     
 
-def evaluate(image_path, mask_path):
+def evaluate(image_path, mask_path, mode):
     image = cv2.imread(image_path)
     mask = cv2.imread(mask_path, 0)
     image = np.array(image) / 255
     mask = np.array(mask) / 255
-    mask_proba = get_mask(image)
     
-    for threshold in np.arange(0.3, 0.9, 0.05):
-        iou_score = iou_metric(mask, np.int32(mask_proba > threshold))
-        print("{:.2f} -> {}".format(threshold, iou_score))
+    mask_proba = get_mask(image, mode=mode)
+
+    prefix = image_path.split('/')[-1].split('.')[0]
+
+    cv2.imwrite('test/' + prefix + '_' + mode + '_mask.png', mask_proba * 255)
+    mask_proba = (mask_proba > 0.5).astype(np.uint8)
+    cv2.imwrite('test/' + prefix + '_' + mode + '_mask_thres.png', mask_proba * 255)
+
+    # for threshold in np.arange(0.3, 0.9, 0.05):
+    #     iou_score = iou_metric(mask, np.int32(mask_proba > threshold))
+    #     print("{:.2f} -> {}".format(threshold, iou_score))
 
 
-for fname in os.listdir('dataset/raw/val/image'):
-    print(fname)
-    evaluate('dataset/raw/val/image/' + fname, 'dataset/raw/val/label/' + fname)
+evaluate('dataset/raw/train/image/I1.png', 'dataset/raw/train/label/I1.png', mode = 'average')
+evaluate('dataset/raw/train/image/I1.png', 'dataset/raw/train/label/I1.png', mode = 'geometric')
+
+
+evaluate('dataset/raw/val/image/I61.png', 'dataset/raw/val/label/I61.png', mode = 'average')
+evaluate('dataset/raw/val/image/I61.png', 'dataset/raw/val/label/I61.png', mode = 'geometric')
+# for fname in os.listdir('dataset/raw/val/image'):
+#     print(fname)
+#     evaluate('dataset/raw/val/image/' + fname, 'dataset/raw/val/label/' + fname)
 
 
 
