@@ -5,14 +5,11 @@ from keras_radam import RAdam
 from model import *
 from data import *
 import config
-from utils import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 train_data_gen_args = dict(
-                    # featurewise_center = False, 
-                    # samplewise_center = False,
                     # rotation_range = 10, 
                     # width_shift_range = 0.01, 
                     # height_shift_range = 0.01, 
@@ -45,8 +42,8 @@ print("\n-----------------------------------------------------------------\n")
 print("Number of training set:", N_TRAIN_SAMPLES)
 print("Number of validation set:", N_TEST_SAMPLES)
 
-# model = unet(input_size = config.input_size)
-model = sm.Unet('resnet34', encoder_weights='imagenet', input_shape=config.input_size, classes=1, activation='sigmoid')
+model = unet(input_size = config.input_size)
+# model = sm.Unet('resnet34', encoder_weights='imagenet', input_shape=config.input_size, classes=1, activation='sigmoid')
 model.summary()
 
 if(config.pretrained_weights):
@@ -69,7 +66,7 @@ lr_reduction = ReduceLROnPlateau(monitor='loss',
                                 min_lr=1e-8)
 model.fit_generator(
     traning_generator, 
-    steps_per_epoch=N_TRAIN_SAMPLES // config.batch_size,
+    steps_per_epoch=min(1000, N_TRAIN_SAMPLES // config.batch_size),
     initial_epoch=config.initial_epoch,
     epochs=config.num_epoch, 
     validation_data=validation_generator,

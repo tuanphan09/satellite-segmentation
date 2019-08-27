@@ -1,86 +1,54 @@
 import numpy as np
 import tensorflow as tf
+import keras.backend as K
 from keras.losses import binary_crossentropy
+from segmentation_models.losses import dice_loss, jaccard_loss
 
-# src: https://www.kaggle.com/aglotero/another-iou-metric
-def iou_metric(y_true_in, y_pred_in, print_table=False):
-    labels = y_true_in
-    y_pred = y_pred_in
-    
-    true_objects = 2
-    pred_objects = 2
+SMOOTH = 1.
 
-    intersection = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=(true_objects, pred_objects))[0]
+# keras loss for training
 
-    # Compute areas (needed for finding the union between all objects)
-    area_true = np.histogram(labels, bins = true_objects)[0]
-    area_pred = np.histogram(y_pred, bins = pred_objects)[0]
-    area_true = np.expand_dims(area_true, -1)
-    area_pred = np.expand_dims(area_pred, 0)
+def bce_log_dice_loss(gt, pr, smooth=SMOOTH, per_image=True, beta=1.):
+    bce = K.mean(binary_crossentropy(gt, pr))
+    loss = bce - K.log(dice_loss(gt, pr, smooth=smooth, per_image=per_image, beta=beta))
+    return loss
 
-    # Compute union
-    union = area_true + area_pred - intersection
-
-    # Exclude background from the analysis
-    intersection = intersection[1:,1:]
-    union = union[1:,1:]
-    union[union == 0] = 1e-9
-
-    # Compute the intersection over union
-    iou = intersection / union
-
-    # Precision helper function
-    def precision_at(threshold, iou):
-        matches = iou > threshold
-        true_positives = np.sum(matches, axis=1) == 1   # Correct objects
-        false_positives = np.sum(matches, axis=0) == 0  # Missed objects
-        false_negatives = np.sum(matches, axis=1) == 0  # Extra objects
-        tp, fp, fn = np.sum(true_positives), np.sum(false_positives), np.sum(false_negatives)
-        return tp, fp, fn
-
-    # Loop over IoU thresholds
-    prec = []
-    if print_table:
-        print("Thresh\tTP\tFP\tFN\tPrec.")
-    for t in np.arange(0.5, 1.0, 0.05):
-        tp, fp, fn = precision_at(t, iou)
-        if (tp + fp + fn) > 0:
-            p = tp / (tp + fp + fn)
-        else:
-            p = 0
-        if print_table:
-            print("{:1.3f}\t{}\t{}\t{}\t{:1.3f}".format(t, tp, fp, fn, p))
-        prec.append(p)
-    
-    if print_table:
-        print("AP\t-\t-\t-\t{:1.3f}".format(np.mean(prec)))
-    return np.mean(prec)
-
-def iou_metric_batch(y_true_in, y_pred_in):
-    batch_size = y_true_in.shape[0]
-    metric = []
-    for batch in range(batch_size):
-        value = iou_metric(y_true_in[batch], y_pred_in[batch])
-        metric.append(value)
-    return np.mean(metric)
-
-def my_iou_metric(label, pred):
-    metric_value = tf.py_func(iou_metric_batch, [label, pred], tf.float64)
-    return metric_value
-
-
-def bce_dice_loss(y_true, y_pred):
-    def dice_loss(y_true, y_pred):
-        numerator = 2 * tf.reduce_sum(y_true * y_pred, axis=(1,2,3))
-        denominator = tf.reduce_sum(y_true + y_pred, axis=(1,2,3))
-
-        return tf.reshape(1 - numerator / denominator, (-1, 1, 1))
-
-    return binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
+def bce_log_jaccard_loss(gt, pr, smooth=SMOOTH, per_image=True):
+    bce = K.mean(binary_crossentropy(gt, pr))
+    loss = bce - K.log(jaccard_loss(gt, pr, smooth=smooth, per_image=per_image))
+    return loss
 
 
 
-# ensemble strategy
+
+
+# metric for final result
+
+def iou_score(gt, pr, smooth=SMOOTH, per_image=True, threshold=None):
+    gt = np.array(gt, dtype=np.float)
+    pr = np.array(pr, dtype=np.float)
+    assert len(gt.shape) == len(pr.shape) == 3
+
+    if per_image:
+        axes = (1, 2)
+    else:
+        axes = (0, 1, 2)
+        
+    if threshold is not None:
+        pr = (pr > threshold).astype(np.float)
+
+    intersection = np.sum(gt * pr, axis=axes)
+    union = np.sum(gt + pr, axis=axes) - intersection
+    iou = (intersection + smooth) / (union + smooth)
+
+    # mean per image
+    if per_image:
+        iou = np.mean(iou, axis=0)
+
+    return iou
+
+
+# ensemble strategy for final result
 def gemetric_mean(iterable):
     a = np.array(iterable)
     return a.prod()**(1.0/len(a))

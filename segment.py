@@ -73,7 +73,7 @@ def split(image, strides=(100, 100)):
     return position, input_image
 
 def get_mask(image, mode='average'):
-    position, input_data = split(image, strides=(100, 120))
+    position, input_data = split(image, strides=(50, 50))
     input_data = np.array(input_data)
     prediction = model.predict(input_data, verbose=1)
 
@@ -86,6 +86,7 @@ def get_mask(image, mode='average'):
             count_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += 1
         return total_mask / count_mask
     elif mode == 'geometric':
+        prediction[prediction == 0] = 1e-9
         for i in range(len(position)):
             x, y = position[i]
             total_mask[x : x + config.input_size[0], y : y + config.input_size[1]] += np.log(prediction[i,:,:,0])
@@ -96,7 +97,7 @@ def get_mask(image, mode='average'):
         return None
     
 
-def evaluate(image_path, mask_path, mode):
+def evaluate(image_path, mask_path, mode, thresholds=[]):
     image = cv2.imread(image_path)
     mask = cv2.imread(mask_path, 0)
     image = np.array(image) / 255
@@ -104,48 +105,64 @@ def evaluate(image_path, mask_path, mode):
     
     mask_proba = get_mask(image, mode=mode)
 
-    prefix = image_path.split('/')[-1].split('.')[0]
+    # save result
+    # prefix = image_path.split('/')[-1].split('.')[0]
+    # cv2.imwrite('test/' + prefix + '_' + mode + '_mask_proba.png', mask_proba * 255)
+    # mask_proba = (mask_proba > 0.5).astype(np.uint8)
+    # cv2.imwrite('test/' + prefix + '_' + mode + '_mask.png', mask_proba * 255)
 
-    cv2.imwrite('test/' + prefix + '_' + mode + '_mask.png', mask_proba * 255)
-    mask_proba = (mask_proba > 0.5).astype(np.uint8)
-    cv2.imwrite('test/' + prefix + '_' + mode + '_mask_thres.png', mask_proba * 255)
+    score = iou_score([mask], [mask_proba], threshold=None)
+    thres_scores = []
+    for threshold in thresholds:
+        iou = iou_score([mask], [mask_proba], threshold=threshold)
+        thres_scores.append(iou)
+    return score, thres_scores
 
-    # for threshold in np.arange(0.3, 0.9, 0.05):
-    #     iou_score = iou_metric(mask, np.int32(mask_proba > threshold))
-    #     print("{:.2f} -> {}".format(threshold, iou_score))
+def get_best_threshold():
+    scores = []
+    thres_scores = []
+    thresholds = np.arange(0.1, 0.91, 0.05)
+    for fname in os.listdir(os.path.join(config.raw_val_dir, 'image')):
+        score, thres_score = evaluate(os.path.join(config.raw_val_dir, 'image', fname), os.path.join(config.raw_val_dir, 'label', fname), 'average', thresholds)
+        scores.append(score)
+        thres_scores.append(thres_score)
+        
+    scores = np.mean(scores)
+    thres_scores = np.mean(thres_scores, axis=0)
+    thres_scores = np.around(thres_scores, 4)
+    print("Score: {:.3f}".format(scores))
+    print("Smooth score with threshold")
+    print("Threshold -> Score")
+    for i in range(len(thresholds)):
+        print("{:.2f} -> {:.3f}".format(thresholds[i], thres_scores[i]))
+
+    print("-----Conclusion-----")
+    max_value = np.max(thres_scores)
+    max_range = np.where(np.array(thres_scores) == max_value)[0]
+    print("Max score: {:.3f}, threshold: [{:.2f}, {:.2f}]".format(max_value, thresholds[max_range[0]], thresholds[max_range[-1]]))
+
+get_best_threshold()
+
+# evaluate('dataset/raw/train/image/III-I7.png', 'dataset/raw/train/label/III-I7.png', mode = 'average')
+# evaluate('dataset/raw/train/image/III-I7.png', 'dataset/raw/train/label/III-I7.png', mode = 'geometric')
+
+# evaluate('dataset/raw/val/image/I-I7.png', 'dataset/raw/val/label/I-I7.png', mode = 'average')
+# evaluate('dataset/raw/val/image/I-I7.png', 'dataset/raw/val/label/I-I7.png', mode = 'geometric')
 
 
-evaluate('dataset/raw/train/image/I1.png', 'dataset/raw/train/label/I1.png', mode = 'average')
-evaluate('dataset/raw/train/image/I1.png', 'dataset/raw/train/label/I1.png', mode = 'geometric')
 
 
-evaluate('dataset/raw/val/image/I61.png', 'dataset/raw/val/label/I61.png', mode = 'average')
-evaluate('dataset/raw/val/image/I61.png', 'dataset/raw/val/label/I61.png', mode = 'geometric')
-# for fname in os.listdir('dataset/raw/val/image'):
-#     print(fname)
-#     evaluate('dataset/raw/val/image/' + fname, 'dataset/raw/val/label/' + fname)
-
-
-
-
-
-# for fname in os.listdir('dataset/raw/train/image'):
-#     segmentaion_file(model, os.path.join('dataset/raw/train/image/', fname))
-#     mask = proba_mask * 255
-#     prefix = path.split('/')[-1].split('.')[0]
-#     cv2.imwrite('test/large/train/' + prefix + '_image.png', image)
-#     cv2.imwrite('test/large/train/' + prefix + '_mask.png', mask)
-
-#     mask = (proba_mask > 0.5).astype(np.uint8) * 255
-#     cv2.imwrite('test/large/train/' + prefix + '_mask_hard.png', mask)
-# data_dir = 'test/large/train'
+# data_dir = 'test/'
 # for fname in os.listdir(data_dir):
-#     if 'hard' in fname:
+#     if 'mask.png' in fname:
 #         prefix = fname.split('_')[0]
-#         image = cv2.imread(os.path.join(data_dir, prefix + ".png"))
-#         mask = cv2.imread(os.path.join(data_dir, prefix + "_mask_hard.png"))
+#         image = cv2.imread(os.path.join(config.raw_val_dir, 'image', prefix + ".png"))
+#         if image is None:
+#             image = cv2.imread(os.path.join(config.raw_train_dir, 'image', prefix + ".png"))
+
+#         mask = cv2.imread(os.path.join(data_dir, prefix + "_average_mask.png"))
         
 #         concat = np.concatenate((image, mask), axis=0)
-#         cv2.imwrite(os.path.join(data_dir, prefix + '_concat.png'), concat)
+#         cv2.imwrite(os.path.join(data_dir, 'concat', prefix + '_concat.png'), concat)
 
 

@@ -22,11 +22,11 @@ def crop_image(prefix, image, mask, save_dir):
             img_crop = image[x : x + config.input_size[0], y : y + config.input_size[1], :]
             mask_crop = mask[x : x + config.input_size[0], y : y + config.input_size[1], :]
             x += config.strides[0]  
-            if np.sum((mask_crop==255).astype(np.uint8)) / 3 > config.min_num_pixel:
+            if np.sum((mask_crop==255).astype(np.uint8)) / 3 >= config.min_num_pixel:
                 cnt_water += 1     
                 cv2.imwrite(os.path.join(save_dir, 'image', prefix + "_water_" + str(cnt_water) + ".png"), img_crop)
                 cv2.imwrite(os.path.join(save_dir, 'label', prefix + "_water_" + str(cnt_water) + ".png"), mask_crop)
-        #     elif cnt_land < cnt_water / 1.2 and np.random.choice(100) < 35:
+        #     elif cnt_land < cnt_water and np.random.choice(100) < 25:
         #         cnt_land += 1
         #         cv2.imwrite(os.path.join(save_dir, 'image', prefix + "_land_" + str(cnt_land) + ".png"), img_crop)
         #         cv2.imwrite(os.path.join(save_dir, 'label', prefix + "_land_" + str(cnt_land) + ".png"), mask_crop)
@@ -55,8 +55,8 @@ def process(data_dir, save_dir, scale_range=[]):
 
 # training data
 clear_data(config.train_dir)
-process(config.raw_train_dir, config.train_dir, scale_range=[0.7, 0.8, 0.9])
+process(config.raw_train_dir, config.train_dir, scale_range=[0.8])
 
 # valdiation data
 clear_data(config.val_dir)
-process(config.raw_val_dir, config.val_dir, scale_range=[0.9])
+process(config.raw_val_dir, config.val_dir, scale_range=[])
